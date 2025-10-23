@@ -86,3 +86,73 @@ def create_rag_chain(vector_store, api_key):
     
     return final_chain
 
+# Main Streamlit App
+
+def main():
+    api_key = load_api_key()
+    
+    st.set_page_config(page_title="YT Video Chatbot", layout="wide")
+    st.title("Ask Questions to a YouTube Video 💬")
+    
+    # Get user input for the video
+    youtube_url = st.text_input("Enter the YouTube Video URL:", placeholder="https.youtube.com/watch?v=...")
+
+    if st.button("Process Video"):
+        if not youtube_url:
+            st.warning("Please enter a YouTube URL.")
+        else:
+            video_id = get_video_id(youtube_url)
+            
+            if video_id:
+                with st.spinner("Processing video... This may take a moment."):
+                    try:
+                        # Clearing any old chain from memory
+                        if "rag_chain" in st.session_state:
+                            del st.session_state.rag_chain
+
+                        # 1. Get Transcript
+                        raw_text = get_transcript_text(video_id)
+                        
+                        if raw_text:
+                            # 2. Split into Chunks
+                            text_chunks = get_text_chunks(raw_text)
+                            
+                            # 3. Create Vector Store
+                            vector_store = get_vector_store(text_chunks, api_key)
+                            
+                            # 4. Create the RAG chain and save to session state
+                            st.session_state.rag_chain = create_rag_chain(vector_store, api_key)
+                            
+                            st.success("Video processed! You can now ask questions below.")
+                    except Exception as e:
+                        st.error(f"An error occurred: {e}")
+    
+    st.divider() # Adds a horizontal line
+
+    # --- This is the new "below" section ---
+    
+    # 2. Get user's question
+    user_question = st.text_input("Ask a question about the video:")
+
+    if st.button("Get Answer"):
+        if "rag_chain" not in st.session_state:
+            st.warning("You must process a video first.")
+        elif not user_question:
+            st.warning("Please enter a question.")
+        else:
+            # 3. Use the chain to get an answer
+            with st.spinner("Thinking..."):
+                try:
+                    # Retrieve the chain from memory
+                    chain = st.session_state.rag_chain
+                    
+                    # Invoke the chain with the user's question
+                    result = chain.invoke(user_question)
+                    
+                    # 4. Display the answer
+                    st.write(result)
+                except Exception as e:
+                    st.error(f"An error occurred while getting the answer: {e}")
+
+if __name__ == "__main__":
+    main()
